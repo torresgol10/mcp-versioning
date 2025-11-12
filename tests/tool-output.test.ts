@@ -62,3 +62,34 @@ test('get_latest_versions_batch returns single result', async () => {
   assert.ok(hasStructuredContent(r4));
   assert.equal((r4.structuredContent as any).results.length, 1);
 });
+
+test('generate_purl resolves latest version if missing', async () => {
+  const single = await tools.generatePurl({ system: 'NPM', name: 'react' });
+  assert.ok(hasStructuredContent(single));
+  const sc: any = single.structuredContent;
+  assert.ok(sc.purl.startsWith('pkg:npm/react@'));
+  assert.equal(sc.source, 'latest_fetched');
+});
+
+test('generate_purl uses provided version', async () => {
+  const single = await tools.generatePurl({ system: 'PYPI', name: 'django', version: '5.0' });
+  assert.ok(hasStructuredContent(single));
+  const sc: any = single.structuredContent;
+  assert.equal(sc.purl, 'pkg:pypi/django@5.0');
+  assert.equal(sc.source, 'provided');
+});
+
+test('generate_purls_batch mixes provided and fetched', async () => {
+  const batch = await tools.generatePurlsBatch({ packages: [
+    { system: 'NPM', name: 'react' },
+    { system: 'PYPI', name: 'django', version: '5.0' }
+  ]});
+  assert.ok(hasStructuredContent(batch));
+  const sc: any = batch.structuredContent;
+  assert.equal(sc.total, 2);
+  assert.equal(sc.results.length, 2);
+  const react = sc.results.find((r: any) => r.system === 'NPM');
+  const django = sc.results.find((r: any) => r.system === 'PYPI');
+  assert.ok(react.purl.startsWith('pkg:npm/react@'));
+  assert.equal(django.purl, 'pkg:pypi/django@5.0');
+});

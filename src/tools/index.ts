@@ -29,6 +29,22 @@ export const GetLatestVersionsBatchSchema = z.object({
   packages: z.array(z.object({ system: z.enum(SUPPORTED_SYSTEMS), name: z.string(), includePrerelease: z.boolean().optional() })),
 });
 
+export const GeneratePurlSchema = z.object({
+  system: z.enum(SUPPORTED_SYSTEMS),
+  name: z.string(),
+  version: z.string().optional(),
+  includePrerelease: z.boolean().optional(),
+});
+
+export const GeneratePurlsBatchSchema = z.object({
+  packages: z.array(z.object({
+    system: z.enum(SUPPORTED_SYSTEMS),
+    name: z.string(),
+    version: z.string().optional(),
+    includePrerelease: z.boolean().optional(),
+  }))
+});
+
 function formatError(error: unknown): { isError: true; content: Array<{ type: 'text'; text: string }>; _meta?: any } {
   if (typeof error === 'object' && error !== null && 'status' in error) {
     const depsError = error as DepsDevError;
@@ -161,6 +177,57 @@ export class VersionTools {
       }
       const summary = { total: packages.length, successful: results.filter(r => r.result).length, failed: results.filter(r => r.error).length, cached: cacheSummary.hits };
       return { content: [{ type: 'text' as const, text: JSON.stringify({ results, summary }, null, 2) }], structuredContent: { results, summary } as Record<string, unknown> };
+    } catch (error) {
+      return formatError(error);
+    }
+  }
+
+  private purlSystemMap: Record<string,string> = {
+    NPM: 'npm',
+    CARGO: 'cargo',
+    PYPI: 'pypi',
+    GO: 'golang',
+    RUBYGEMS: 'gem',
+    NUGET: 'nuget'
+  };
+
+  async generatePurl(args: z.infer<typeof GeneratePurlSchema>) {
+    try {
+      const { system, name, version, includePrerelease = false } = args;
+      let finalVersion = version;
+      let source: 'provided' | 'latest_fetched' = 'provided';
+      if (!finalVersion) {
+        const latest = await this.getLatestVersion({ system, name, includePrerelease });
+        if ('structuredContent' in latest) {
+          finalVersion = (latest.structuredContent as any).version;
+          source = 'latest_fetched';
+        } else {
+          throw new Error('Failed to resolve latest version');
+        }
+      }
+      if (!finalVersion) throw new Error('No version available');
+      const purl = `pkg:${this.purlSystemMap[system]}/${name}@${finalVersion}`;
+      const structured = { purl, system, name, version: finalVersion, source };
+      return { content: [{ type: 'text' as const, text: JSON.stringify(structured, null, 2) }], structuredContent: structured as Record<string, unknown> };
+    } catch (error) {
+      return formatError(error);
+    }
+  }
+
+  async generatePurlsBatch(args: z.infer<typeof GeneratePurlsBatchSchema>) {
+    try {
+      const { packages } = args;
+      const results: any[] = [];
+      for (const pkg of packages) {
+        const single = await this.generatePurl(pkg);
+        if ('structuredContent' in single) {
+          results.push(single.structuredContent);
+        } else {
+          results.push({ system: pkg.system, name: pkg.name, error: (single.content?.[0]?.text) || 'Unknown error' });
+        }
+      }
+      const structured = { total: packages.length, results };
+      return { content: [{ type: 'text' as const, text: JSON.stringify(structured, null, 2) }], structuredContent: structured as Record<string, unknown> };
     } catch (error) {
       return formatError(error);
     }

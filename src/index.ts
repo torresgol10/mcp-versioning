@@ -195,6 +195,66 @@ class VersioningMCPServer {
         return await this.tools.getLatestVersionsBatch(args as z.infer<typeof GetLatestVersionsBatchSchema>);
       }
     );
+
+    // Register: generate_purl
+    this.server.registerTool(
+      'generate_purl',
+      {
+        description: 'Generate a Package URL (PURL) for a given package. If version is omitted, latest version is resolved first.',
+        inputSchema: {
+          system: z.enum(Array.from(SUPPORTED_SYSTEMS) as [string, ...string[]]).describe('Package ecosystem'),
+          name: z.string().describe('Package name'),
+          version: z.string().optional().describe('Explicit version (optional)'),
+          includePrerelease: z.boolean().optional().describe('Include prerelease resolution when version omitted'),
+        },
+        outputSchema: {
+          purl: z.string(),
+          system: z.string(),
+          name: z.string(),
+          version: z.string(),
+          source: z.enum(['provided','latest_fetched'])
+        }
+      },
+      async (args) => {
+        const { GeneratePurlSchema } = await import('./tools/index.js');
+        return await this.tools.generatePurl(args as z.infer<typeof GeneratePurlSchema>);
+      }
+    );
+
+    // Register: generate_purls_batch
+    this.server.registerTool(
+      'generate_purls_batch',
+      {
+        description: 'Generate PURLs for multiple packages. Versions resolved when omitted.',
+        inputSchema: {
+          packages: z.array(
+            z.object({
+              system: z.enum(Array.from(SUPPORTED_SYSTEMS) as [string, ...string[]]),
+              name: z.string(),
+              version: z.string().optional(),
+              includePrerelease: z.boolean().optional(),
+            })
+          ).describe('Packages for which to generate PURLs'),
+        },
+        outputSchema: {
+          total: z.number(),
+          results: z.array(
+            z.object({
+              purl: z.string().optional(),
+              system: z.string(),
+              name: z.string(),
+              version: z.string().optional(),
+              source: z.string().optional(),
+              error: z.string().optional(),
+            })
+          )
+        }
+      },
+      async (args) => {
+        const { GeneratePurlsBatchSchema } = await import('./tools/index.js');
+        return await this.tools.generatePurlsBatch(args as z.infer<typeof GeneratePurlsBatchSchema>);
+      }
+    );
   }
 
   async run() {

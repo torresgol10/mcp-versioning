@@ -343,10 +343,53 @@ Los PURLs facilitan la correlación de paquetes en herramientas de seguridad, an
 | `inspect_manifest` | Parsear archivo local | Rápida |
 | `get_package_versions_batch` ⭐ | Versiones de múltiples paquetes | **10-50x más rápida** |
 | `get_latest_versions_batch` ⭐ | Últimas versiones de múltiples | **10-50x más rápida** |
+| `generate_purl` | PURL para 1 paquete (resuelve versión) | Rápida |
+| `generate_purls_batch` | PURLs múltiples (resolución masiva) | **Muy eficiente** |
 
 **Regla de oro:** Si consultas 2+ paquetes, usa batching.
 
 Consulta [BATCHING_GUIDE.md](BATCHING_GUIDE.md) para ejemplos prácticos.
+
+### PURLs (Package URL)
+
+Ahora dispones de herramientas para generar PURLs estandarizados:
+
+#### `generate_purl`
+Genera un PURL. Si no indicas `version`, se obtiene la última versión estable (semver, excluye prerelease salvo `includePrerelease:true`).
+
+Ejemplo entrada sin versión:
+```json
+{ "system": "NPM", "name": "react" }
+```
+Ejemplo salida:
+```json
+{ "purl": "pkg:npm/react@18.2.0", "system": "NPM", "name": "react", "version": "18.2.0", "source": "latest_fetched" }
+```
+
+#### `generate_purls_batch`
+Versión batch para múltiples paquetes; resuelve versión cuando falta.
+
+Entrada:
+```json
+{
+  "packages": [
+    { "system": "NPM", "name": "react" },
+    { "system": "CARGO", "name": "serde" },
+    { "system": "PYPI", "name": "django", "version": "5.0" }
+  ]
+}
+```
+Salida:
+```json
+{
+  "total": 3,
+  "results": [
+    { "purl": "pkg:npm/react@18.2.0", "system": "NPM", "name": "react", "version": "18.2.0", "source": "latest_fetched" },
+    { "purl": "pkg:cargo/serde@1.0.204", "system": "CARGO", "name": "serde", "version": "1.0.204", "source": "latest_fetched" },
+    { "purl": "pkg:pypi/django@5.0", "system": "PYPI", "name": "django", "version": "5.0", "source": "provided" }
+  ]
+}
+```
 
 ## Desarrollo
 

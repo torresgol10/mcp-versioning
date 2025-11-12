@@ -1,5 +1,6 @@
 import { SystemType } from '../constants/systems.js';
 import { PackageVersionsResponse, LatestVersionResponse, DepsDevError } from '../types/index.js';
+import { valid, rcompare, parse as parseSemver } from 'semver';
 
 const DEPS_DEV_API_BASE = 'https://api.deps.dev/v3alpha';
 const MAX_RETRIES = 3;
@@ -169,10 +170,24 @@ export class DepsDevClient {
       };
     }
 
-    // If no default or including prerelease, sort by version (simple lexicographic for now)
-    const sortedVersions = versionsData.versions
-      .filter(v => !v.isDeprecated)
-      .sort((a, b) => b.version.localeCompare(a.version));
+    // Filter deprecated
+    let candidateVersions = versionsData.versions.filter(v => !v.isDeprecated);
+    // If not including prerelease, drop semver prereleases when detectable
+    if (!includePrerelease) {
+      candidateVersions = candidateVersions.filter(v => {
+        const sv = parseSemver(v.version, { loose: true });
+        return !sv || sv.prerelease.length === 0; // keep if parse fails (non-semver) or no prerelease
+      });
+    }
+    // Sort using semver when possible, fallback to lexicographic
+    const sortedVersions = candidateVersions.sort((a, b) => {
+      const va = valid(a.version, { loose: true });
+      const vb = valid(b.version, { loose: true });
+      if (va && vb) return rcompare(va, vb); // descending
+      if (va && !vb) return -1; // valid semver before non-semver
+      if (!va && vb) return 1;
+      return b.version.localeCompare(a.version);
+    });
 
     if (sortedVersions.length === 0) {
       throw {

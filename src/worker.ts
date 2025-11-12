@@ -13,6 +13,8 @@ const GetLatestVersionSchema = z.object({ system: z.enum(SUPPORTED_SYSTEMS), nam
 const InspectManifestSchema = z.object({ manifestPath: z.string(), content: z.string() }); // content required in worker
 const GetPackageVersionsBatchSchema = z.object({ packages: z.array(z.object({ system: z.enum(SUPPORTED_SYSTEMS), name: z.string() })) });
 const GetLatestVersionsBatchSchema = z.object({ packages: z.array(z.object({ system: z.enum(SUPPORTED_SYSTEMS), name: z.string(), includePrerelease: z.boolean().optional() })) });
+const GeneratePurlSchema = z.object({ system: z.enum(SUPPORTED_SYSTEMS), name: z.string(), version: z.string().optional(), includePrerelease: z.boolean().optional() });
+const GeneratePurlsBatchSchema = z.object({ packages: z.array(z.object({ system: z.enum(SUPPORTED_SYSTEMS), name: z.string(), version: z.string().optional(), includePrerelease: z.boolean().optional() })) });
 
 // Singletons
 const client = new DepsDevClient();
@@ -143,7 +145,9 @@ const toolRegistry = [
   { name: 'get_latest_version', description: 'Get latest version for a package', inputSchema: zodToJsonSchema(GetLatestVersionSchema), outputSchema: { type: 'object', properties: { version: { type: 'string' }, publishedAt: { type: 'string' }, isDefault: { type: 'boolean' } } } },
   { name: 'inspect_manifest', description: 'Parse manifest (content obligatorio en Worker)', inputSchema: zodToJsonSchema(InspectManifestSchema), outputSchema: { type: 'object', properties: { system: { type: 'string' }, dependencies: { type: 'array' }, warnings: { type: 'array', items: { type: 'string' } } } } },
   { name: 'get_package_versions_batch', description: 'Batch package versions', inputSchema: zodToJsonSchema(GetPackageVersionsBatchSchema), outputSchema: { type: 'object', properties: { total: { type: 'number' }, results: { type: 'array' } } } },
-  { name: 'get_latest_versions_batch', description: 'Batch latest versions', inputSchema: zodToJsonSchema(GetLatestVersionsBatchSchema), outputSchema: { type: 'object', properties: { total: { type: 'number' }, results: { type: 'array' } } } }
+  { name: 'get_latest_versions_batch', description: 'Batch latest versions', inputSchema: zodToJsonSchema(GetLatestVersionsBatchSchema), outputSchema: { type: 'object', properties: { total: { type: 'number' }, results: { type: 'array' } } } },
+  { name: 'generate_purl', description: 'Generate a PURL for a single package', inputSchema: zodToJsonSchema(GeneratePurlSchema), outputSchema: { type: 'object', properties: { purl: { type: 'string' }, system: { type: 'string' }, name: { type: 'string' }, version: { type: 'string' }, source: { type: 'string' } } } },
+  { name: 'generate_purls_batch', description: 'Generate PURLs for multiple packages', inputSchema: zodToJsonSchema(GeneratePurlsBatchSchema), outputSchema: { type: 'object', properties: { total: { type: 'number' }, results: { type: 'array' } } } }
 ];
 
 // JSON-RPC types
@@ -224,6 +228,38 @@ async function handleToolCall(name: string, args: any) {
       const parsed = GetLatestVersionsBatchSchema.parse(args);
       const fetched = await client.getLatestVersionsBatch(parsed.packages);
       return { content: [{ type: 'text', text: JSON.stringify({ total: parsed.packages.length, results: fetched }, null, 2) }], structuredContent: { total: parsed.packages.length, results: fetched } };
+    }
+    case 'generate_purl': {
+      const parsed = GeneratePurlSchema.parse(args);
+      let version = parsed.version;
+      let source: 'provided' | 'latest_fetched' = 'provided';
+      if (!version) {
+        const latest = await client.getLatestVersion(parsed.system, parsed.name, parsed.includePrerelease || false);
+        version = latest.version;
+        source = 'latest_fetched';
+      }
+      const systemMap: Record<string,string> = { NPM:'npm', CARGO:'cargo', PYPI:'pypi', GO:'golang', RUBYGEMS:'gem', NUGET:'nuget' };
+      const purl = `pkg:${systemMap[parsed.system]}/${parsed.name}@${version}`;
+      const structured = { purl, system: parsed.system, name: parsed.name, version, source };
+      return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured };
+    }
+    case 'generate_purls_batch': {
+      const parsed = GeneratePurlsBatchSchema.parse(args);
+      const results: any[] = [];
+      for (const p of parsed.packages) {
+        try {
+          const single = await handleToolCall('generate_purl', p);
+          if ((single as any).structuredContent) {
+            results.push((single as any).structuredContent);
+          } else {
+            results.push({ system: p.system, name: p.name, error: 'Unknown error' });
+          }
+        } catch (e: any) {
+          results.push({ system: p.system, name: p.name, error: e.message || String(e) });
+        }
+      }
+      const structured = { total: parsed.packages.length, results };
+      return { content: [{ type: 'text', text: JSON.stringify(structured, null, 2) }], structuredContent: structured };
     }
     default:
       throw new Error(`Unknown tool: ${name}`);
