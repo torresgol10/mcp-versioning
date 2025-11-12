@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "versioning": {
+      "command": "node",
+      "args": [
+        "C:\\Users\\Torres\\Desktop\\_UbuntuDevShare\\mcp-versioning\\dist\\index.js"
+      ]
+    }
+  }
+}

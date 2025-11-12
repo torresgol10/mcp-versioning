@@ -1,0 +1,8 @@
+name = "mcp-versioning"
+main = "dist/worker.js"
+compatibility_date = "2025-11-12"
+workers_dev = true
+
+[vars]
+MCP_SERVER_NAME = "mcp-versioning"
+MCP_SERVER_VERSION = "0.2.1"
