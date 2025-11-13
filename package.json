@@ -1,12 +1,25 @@
 {
   "name": "mcp-versioning",
-  "version": "0.2.1",
+  "version": "1.0.0",
   "description": "MCP server for querying package versions across multiple ecosystems using deps.dev API",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
     "mcp-versioning": "dist/index.js"
   },
+  "files": [
+    "dist/**/*",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/torresgol10/mcp-versioning.git"
+  },
+  "bugs": {
+    "url": "https://github.com/torresgol10/mcp-versioning/issues"
+  },
+  "homepage": "https://github.com/torresgol10/mcp-versioning#readme",
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",

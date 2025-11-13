@@ -1,9 +1,10 @@
 {
   "mcpServers": {
     "versioning": {
-      "command": "node",
+      "command": "npx",
       "args": [
-        "C:\\Users\\Torres\\Desktop\\_UbuntuDevShare\\mcp-versioning\\dist\\index.js"
+        "-y",
+        "mcp-versioning"
       ]
     }
   }
