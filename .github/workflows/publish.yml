@@ -1,0 +1,80 @@
+name: Publish to npm
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Semver bump (patch|minor|major|none)"
+        required: false
+        default: "none"
+      force:
+        description: "Force publish even if version exists"
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  publish:
+    name: Publish Package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'pnpm'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Optional version bump
+        if: github.event_name == 'workflow_dispatch' && inputs.bump != 'none'
+        id: bump_version
+        run: |
+          pnpm version ${{ inputs.bump }} --no-git-tag-version
+          echo "new_version=$(node -p \"require('./package.json').version\")" >> $GITHUB_OUTPUT
+
+      - name: Commit bumped version
+        if: github.event_name == 'workflow_dispatch' && inputs.bump != 'none'
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add package.json
+          git commit -m "chore: bump version to ${{ steps.bump_version.outputs.new_version }}"
+
+      - name: Run tests
+        run: pnpm test
+
+      - name: Verify version not already published
+        id: version_check
+        run: |
+          PKG_NAME=$(node -p "require('./package.json').name")
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          if npm view "$PKG_NAME@$PKG_VERSION" version &>/dev/null; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Publish
+        if: steps.version_check.outputs.exists == 'false' || (github.event_name == 'workflow_dispatch' && inputs.force == 'true')
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
+
+      - name: Skip notice
+        if: steps.version_check.outputs.exists == 'true' && !(github.event_name == 'workflow_dispatch' && inputs.force == 'true')
+        run: echo "Version already exists on npm; skipping publish."
