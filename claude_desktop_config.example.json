@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "versioning": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-versioning"
+      ]
+    }
+  }
+}
