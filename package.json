@@ -1,6 +1,6 @@
 {
   "name": "mcp-versioning",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "MCP server for querying package versions across multiple ecosystems using deps.dev API",
   "type": "module",
   "main": "dist/index.js",
